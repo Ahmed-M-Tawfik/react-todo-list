@@ -1,3 +1,5 @@
+import "./index.css";
+
 import { useState } from "react";
 
 import Container from "react-bootstrap/Container";
@@ -164,8 +166,8 @@ export default function App() {
 
   return (
     <Container className="text-center">
-      <Row className="mt-4">
-        <h2>What's next?</h2>
+      <Row className="mt-4 app-title">
+        <h1>What's next?</h1>
       </Row>
 
       {newTaskPanelIsOpen === true && (
