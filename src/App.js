@@ -17,6 +17,7 @@ import {
   faCheck,
   faPenToSquare,
 } from "@fortawesome/free-solid-svg-icons";
+import { stringBlank, valueMissing, valuePresent } from "./Util";
 
 const initialTaskData = [
   {
@@ -59,7 +60,10 @@ const initialTaskData = [
 
 export default function App() {
   const [newTaskPanelIsOpen, setNewTaskPanelIsOpen] = useState(false);
-  const [tasks, setTasks] = useState(initialTaskData);
+  const [completedTasksPanelIsOpen, setCompletedTasksPanelIsOpen] =
+    useState(false);
+  const [openTasks, setOpenTasks] = useState(initialTaskData);
+  const [completedTasks, setCompletedTasks] = useState([]);
   const [taskToEdit, setTaskToEdit] = useState(null);
 
   function handleOpenNewTaskPanel() {
@@ -80,44 +84,70 @@ export default function App() {
     e,
     newTaskTitle,
     newTaskText,
-    idOfTaskToUpdate
+    idOfTaskToUpdate,
+    done
   ) {
     e.preventDefault();
 
     const newOrUpdatedTask = {
-      id: crypto.randomUUID(),
+      id: valuePresent(idOfTaskToUpdate)
+        ? idOfTaskToUpdate
+        : crypto.randomUUID(),
       title: newTaskTitle,
       text: newTaskText,
-      done: null,
+      done: valuePresent(done) ? done : null,
     };
 
-    if (idOfTaskToUpdate) {
-      setTasks((tasks) =>
+    let setTasksFunction = setOpenTasks;
+    if (done) {
+      setTasksFunction = setCompletedTasks;
+    }
+
+    if (valuePresent(idOfTaskToUpdate)) {
+      setTasksFunction((tasks) =>
         tasks.map((task) =>
           task.id === idOfTaskToUpdate ? newOrUpdatedTask : task
         )
       );
     } else {
-      setTasks((tasks) => [...tasks, newOrUpdatedTask]);
+      setOpenTasks((tasks) => [...tasks, newOrUpdatedTask]);
     }
 
     handleCloseEditTaskPanel();
   }
 
-  function handleSetTaskDone(idToSetDone) {
-    if (idToSetDone === null) return;
-
-    setTasks((tasks) =>
-      tasks.map((task) =>
-        task.id === idToSetDone ? { ...task, done: Date.now() } : task
-      )
-    );
+  function handleOpenCompletedTasksPanel() {
+    setCompletedTasksPanelIsOpen(true);
   }
 
-  function handleMoveTask(idToMove, direction) {
-    if (idToMove === null || !direction?.trim()) return;
+  function handleCloseCompletedTasksPanel() {
+    setCompletedTasksPanelIsOpen(false);
+  }
 
-    setTasks((oldTasksList) => {
+  function handleSetTaskDone(idToSetDone) {
+    if (valueMissing(idToSetDone)) return;
+
+    let taskToSetDone = openTasks.find((task) => task.id === idToSetDone);
+    taskToSetDone = { ...taskToSetDone, done: Date.now() };
+    setCompletedTasks((tasks) => [...tasks, taskToSetDone]);
+
+    handleDeleteOpenTask(idToSetDone);
+  }
+
+  function handleSetTaskOpen(idToSetOpen) {
+    if (valueMissing(idToSetOpen)) return;
+
+    let taskToSetOpen = completedTasks.find((task) => task.id === idToSetOpen);
+    taskToSetOpen = { ...taskToSetOpen, done: null };
+    setOpenTasks((tasks) => [...tasks, taskToSetOpen]);
+
+    handleDeleteCompletedTask(idToSetOpen);
+  }
+
+  function handleMoveTask(idToMove, direction, setTasksFunction) {
+    if (stringBlank(idToMove)) return;
+
+    setTasksFunction((oldTasksList) => {
       const newTasksList = oldTasksList.slice();
       const indexOfTaskToMove = newTasksList.findIndex(
         ({ id }) => id === idToMove
@@ -140,11 +170,27 @@ export default function App() {
     });
   }
 
-  function handleDeleteTask(idToDelete) {
-    if (idToDelete === null) return;
-    setTasks((tasks) =>
+  function handleMoveOpenTask(idToMove, direction) {
+    handleMoveTask(idToMove, direction, setOpenTasks);
+  }
+
+  function handleMoveCompletedTask(idToMove, direction) {
+    handleMoveTask(idToMove, direction, setCompletedTasks);
+  }
+
+  function handleDeleteTask(idToDelete, setTasksFunction) {
+    if (valueMissing(idToDelete)) return;
+    setTasksFunction((tasks) =>
       tasks.filter((task) => (task.id === idToDelete ? false : true))
     );
+  }
+
+  function handleDeleteOpenTask(idToDelete) {
+    handleDeleteTask(idToDelete, setOpenTasks);
+  }
+
+  function handleDeleteCompletedTask(idToDelete) {
+    handleDeleteTask(idToDelete, setCompletedTasks);
   }
 
   function calculateCountTasksDoneThisWeek() {
@@ -155,13 +201,13 @@ export default function App() {
       now.getDate() - now.getDay() + 1
     );
 
-    return tasks.filter((task) => {
+    return completedTasks.filter((task) => {
       return task.done >= weekStart;
     }).length;
   }
 
   function calculateAllTasksComplete() {
-    return tasks.filter((tasks) => !tasks.done).length === 0;
+    return openTasks.length === 0;
   }
 
   return (
@@ -172,7 +218,7 @@ export default function App() {
 
       {newTaskPanelIsOpen === true && (
         <>
-          <NewTaskPanel
+          <EditTaskPanel
             taskToEdit={taskToEdit}
             onCreateUpdateTask={handleCreateUpdateTask}
             onCancel={handleCloseEditTaskPanel}
@@ -180,18 +226,42 @@ export default function App() {
         </>
       )}
 
-      {newTaskPanelIsOpen === false && (
+      {newTaskPanelIsOpen === false && completedTasksPanelIsOpen === false && (
         <>
-          <NewTaskButton onOpenNewTask={handleOpenNewTaskPanel} />
+          <CenteredButton onClick={handleOpenNewTaskPanel}>
+            Add new task
+          </CenteredButton>
+          <CenteredButton onClick={handleOpenCompletedTasksPanel}>
+            View completed tasks ({calculateCountTasksDoneThisWeek()} this week)
+          </CenteredButton>
           <TasksCompletedHeader
             numTasksCompleted={calculateCountTasksDoneThisWeek()}
             allComplete={calculateAllTasksComplete()}
           />
           <TaskContainer
-            tasks={tasks}
-            onDeleteTask={handleDeleteTask}
-            onMoveTask={handleMoveTask}
+            tasks={openTasks}
+            onDeleteTask={handleDeleteOpenTask}
+            onMoveTask={handleMoveOpenTask}
             onSetTaskDone={handleSetTaskDone}
+            onOpenEditTaskPanel={handleOpenEditTaskPanel}
+          />
+        </>
+      )}
+
+      {newTaskPanelIsOpen === false && completedTasksPanelIsOpen === true && (
+        <>
+          <CenteredButton onClick={handleCloseCompletedTasksPanel}>
+            View incomplete tasks
+          </CenteredButton>
+          <TasksCompletedHeader
+            numTasksCompleted={calculateCountTasksDoneThisWeek()}
+            allComplete={calculateAllTasksComplete()}
+          />
+          <TaskContainer
+            tasks={completedTasks}
+            onDeleteTask={handleDeleteCompletedTask}
+            onMoveTask={handleMoveCompletedTask}
+            onSetTaskDone={handleSetTaskOpen}
             onOpenEditTaskPanel={handleOpenEditTaskPanel}
           />
         </>
@@ -200,7 +270,7 @@ export default function App() {
   );
 }
 
-function NewTaskPanel({ taskToEdit, onCreateUpdateTask, onCancel }) {
+function EditTaskPanel({ taskToEdit, onCreateUpdateTask, onCancel }) {
   const [title, setTitle] = useState(taskToEdit ? taskToEdit.title : "");
   const [text, setText] = useState(taskToEdit ? taskToEdit.text : "");
 
@@ -209,7 +279,15 @@ function NewTaskPanel({ taskToEdit, onCreateUpdateTask, onCancel }) {
       <Col md={{ span: 6 }}>
         <Card className="text-bg-primary">
           <Form
-            onSubmit={(e) => onCreateUpdateTask(e, title, text, taskToEdit?.id)}
+            onSubmit={(e) =>
+              onCreateUpdateTask(
+                e,
+                title,
+                text,
+                taskToEdit?.id,
+                taskToEdit?.done
+              )
+            }
           >
             <Card.Body>
               <Form.Group className="mb-3" controlId="formAddTask">
@@ -247,10 +325,10 @@ function NewTaskPanel({ taskToEdit, onCreateUpdateTask, onCancel }) {
   );
 }
 
-function NewTaskButton({ onOpenNewTask }) {
+function CenteredButton({ onClick, children }) {
   return (
     <Row className="m-3 justify-content-sm-center" xs="auto">
-      <Button onClick={onOpenNewTask}>Add new task</Button>
+      <Button onClick={onClick}>{children}</Button>
     </Row>
   );
 }
@@ -279,21 +357,18 @@ function TaskContainer({
   onSetTaskDone,
   onOpenEditTaskPanel,
 }) {
-  const taskEntryRows = tasks.map(
-    (task) =>
-      task.done === null && (
-        <TaskBlock
-          task={task}
-          key={task.id}
-          onDeleteTask={onDeleteTask}
-          onMoveTask={onMoveTask}
-          onSetTaskDone={onSetTaskDone}
-          onOpenEditTaskPanel={onOpenEditTaskPanel}
-        />
-      )
-  );
+  const taskEntryRows = tasks.map((task) => (
+    <TaskBlock
+      task={task}
+      key={task.id}
+      onDeleteTask={onDeleteTask}
+      onMoveTask={onMoveTask}
+      onSetTaskDone={onSetTaskDone}
+      onOpenEditTaskPanel={onOpenEditTaskPanel}
+    />
+  ));
 
-  return <Container className="mt-4">{taskEntryRows}</Container>;
+  return <Container className="mt-4 mb-4">{taskEntryRows}</Container>;
 }
 
 function TaskBlock({

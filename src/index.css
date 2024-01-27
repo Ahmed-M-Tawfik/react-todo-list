@@ -37,7 +37,7 @@ h1 em {
   padding-bottom: 13px;
 }
 .app-title h1:before {
-  background-color: #c50000;
+  background-color: #44aa00;
   content: "";
   display: block;
   height: 3px;
@@ -45,7 +45,7 @@ h1 em {
   margin-bottom: 5px;
 }
 .app-title h1:after {
-  background-color: #c50000;
+  background-color: #0000ff;
   content: "";
   display: block;
   position: absolute;
